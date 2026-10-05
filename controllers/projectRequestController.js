@@ -1,17 +1,13 @@
 const { Resend } = require("resend");
 const ProjectRequest = require("../models/ProjectRequest");
+const NotFoundError = require("../errors/NotFoundError");
+const ForbiddenError = require("../errors/ForbiddenError");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const createProjectRequest = async (req, res) => {
+const createProjectRequest = async (req, res, next) => {
   try {
     const { name, email, projectType, material, description } = req.body;
-
-    if (!name || !email || !description) {
-      return res.status(400).json({
-        message: "Name, email, and description are required.",
-      });
-    }
 
     const projectRequest = await ProjectRequest.create({
       name,
@@ -45,15 +41,11 @@ const createProjectRequest = async (req, res) => {
       projectRequest,
     });
   } catch (error) {
-    console.error("Project request error:", error);
-
-    return res.status(500).json({
-      message: "Unable to submit project request.",
-    });
+    return next(error);
   }
 };
 
-const getProjectRequests = async (req, res) => {
+const getProjectRequests = async (req, res, next) => {
   try {
     const projectRequests = await ProjectRequest.find({
       owner: req.user.userId,
@@ -61,30 +53,24 @@ const getProjectRequests = async (req, res) => {
 
     return res.status(200).json(projectRequests);
   } catch (error) {
-    console.error("Get project requests error:", error);
-
-    return res.status(500).json({
-      message: "Unable to retrieve project requests.",
-    });
+    return next(error);
   }
 };
 
-const deleteProjectRequest = async (req, res) => {
+const deleteProjectRequest = async (req, res, next) => {
   try {
     const projectRequest = await ProjectRequest.findById(
       req.params.requestId,
     ).select("+owner");
 
     if (!projectRequest) {
-      return res.status(404).json({
-        message: "Project request not found.",
-      });
+      return next(new NotFoundError("Project not found."));
     }
 
     if (projectRequest.owner.toString() !== req.user.userId) {
-      return res.status(403).json({
-        message: "You cannot delete this project request.",
-      });
+      return next(
+        new ForbiddenError("You cannot delete this project request."),
+      );
     }
 
     await projectRequest.deleteOne();
@@ -93,13 +79,10 @@ const deleteProjectRequest = async (req, res) => {
       message: "Project request canceled successfully.",
     });
   } catch (error) {
-    console.error("Delete project request error:", error);
-
-    return res.status(500).json({
-      message: "Unable to cancel project request.",
-    });
+    return next(error);
   }
 };
+
 module.exports = {
   createProjectRequest,
   getProjectRequests,

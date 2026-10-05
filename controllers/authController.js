@@ -1,23 +1,19 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const ConflictError = require("../errors/ConflictError");
+const UnauthorizedError = require("../errors/UnauthorizedError");
+const BadRequestError = require("../errors/BadRequestError");
+const NotFoundError = require("../errors/NotFoundError");
 
-const signup = async (req, res) => {
+const signup = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
-
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "Name, email, and password are required.",
-      });
-    }
 
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      return res.status(409).json({
-        message: "A user with that email already exists.",
-      });
+      return next(new ConflictError("A user with that email already exists."));
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -37,38 +33,23 @@ const signup = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Signup error:", error);
-
-    return res.status(500).json({
-      message: "Unable to create account.",
-    });
+    return next(error);
   }
 };
 
-const login = async (req, res) => {
+const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({
-        message: "Email and password are required.",
-      });
-    }
 
     const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
-      return res.status(401).json({
-        message: "Invalid email or password.",
-      });
+      return next(new UnauthorizedError("Invalid email or password."));
     }
-
     const passwordMatches = await bcrypt.compare(password, user.password);
 
     if (!passwordMatches) {
-      return res.status(401).json({
-        message: "Invalid email or password.",
-      });
+      return next(new UnauthorizedError("Invalid email or password."));
     }
 
     const token = jwt.sign(
@@ -92,22 +73,16 @@ const login = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Login error:", error);
-
-    return res.status(500).json({
-      message: "Unable to log in.",
-    });
+    return next(error);
   }
 };
 
-const getCurrentUser = async (req, res) => {
+const getCurrentUser = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId).select("-password");
+    const user = await User.findById(req.user.userId);
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found.",
-      });
+      return next(new NotFoundError("User not found."));
     }
 
     return res.status(200).json({
@@ -119,35 +94,22 @@ const getCurrentUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get current user error:", error);
-
-    return res.status(500).json({
-      message: "Unable to retrieve user.",
-    });
+    return next(error);
   }
 };
 
-// NEW: update the logged-in user's profile
-const updateCurrentUser = async (req, res) => {
+const updateCurrentUser = async (req, res, next) => {
   try {
     const { name } = req.body;
-
-    if (!name) {
-      return res.status(400).json({
-        message: "Name is required.",
-      });
-    }
 
     const user = await User.findByIdAndUpdate(
       req.user.userId,
       { name },
       { new: true },
-    ).select("-password");
+    );
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found.",
-      });
+      return next(new NotFoundError("User not found."));
     }
 
     return res.status(200).json({
@@ -159,20 +121,14 @@ const updateCurrentUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Update profile error:", error);
-
-    return res.status(500).json({
-      message: "Unable to update profile.",
-    });
+    return next(error);
   }
 };
 
-const updateProfileImage = async (req, res) => {
+const updateProfileImage = async (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({
-        message: "Profile image is required.",
-      });
+      return next(new BadRequestError("Profile image is required."));
     }
 
     const profileImage = `/uploads/${req.file.filename}`;
@@ -181,12 +137,10 @@ const updateProfileImage = async (req, res) => {
       req.user.userId,
       { profileImage },
       { new: true },
-    ).select("-password");
+    );
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found.",
-      });
+      return next(new NotFoundError("User not found."));
     }
 
     return res.status(200).json({
@@ -199,11 +153,7 @@ const updateProfileImage = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Update profile image error:", error);
-
-    return res.status(500).json({
-      message: "Unable to update profile image.",
-    });
+    return next(error);
   }
 };
 

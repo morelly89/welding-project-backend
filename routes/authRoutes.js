@@ -10,12 +10,27 @@ const {
   updateProfileImage,
 } = require("../controllers/authController");
 
+const {
+  validateSignup,
+  validateLogin,
+  validateUpdateCurrentUser,
+} = require("../middlewares/validation");
+
 const router = express.Router();
 
-router.post("/signup", signup);
-router.post("/login", login);
+router.post("/signup", validateSignup, signup);
+
+router.post("/login", validateLogin, login);
+
 router.get("/me", authMiddleware, getCurrentUser);
-router.patch("/me", authMiddleware, updateCurrentUser);
+
+router.patch(
+  "/me",
+  authMiddleware,
+  validateUpdateCurrentUser,
+  updateCurrentUser,
+);
+
 router.patch(
   "/me/photo",
   authMiddleware,
