@@ -3,7 +3,10 @@ const ProjectRequest = require("../models/ProjectRequest");
 const NotFoundError = require("../errors/NotFoundError");
 const ForbiddenError = require("../errors/ForbiddenError");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend =
+  process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "re_placeholder"
+    ? new Resend(process.env.RESEND_API_KEY)
+    : null;
 
 const createProjectRequest = async (req, res, next) => {
   try {
@@ -15,15 +18,16 @@ const createProjectRequest = async (req, res, next) => {
       projectType,
       material,
       description,
-      owner: req.user.userId,
+      owner: req.user.userId
     });
 
-    await resend.emails.send({
-      from: "Morelly Welding <onboarding@resend.dev>",
-      to: process.env.REQUEST_EMAIL,
-      replyTo: email,
-      subject: `New Welding Project Request from ${name}`,
-      html: `
+    if (resend) {
+      await resend.emails.send({
+        from: "Morelly Welding <onboarding@resend.dev>",
+        to: process.env.REQUEST_EMAIL,
+        replyTo: email,
+        subject: `New Welding Project Request from ${name}`,
+        html: `
         <h2>New Welding Project Request</h2>
 
         <p><strong>Name:</strong> ${name}</p>
@@ -33,12 +37,13 @@ const createProjectRequest = async (req, res, next) => {
 
         <h3>Description</h3>
         <p>${description}</p>
-      `,
-    });
+      `
+      });
+    }
 
     return res.status(201).json({
-      message: "Project request saved and sent successfully.",
-      projectRequest,
+      message: "Project request saved successfully.",
+      projectRequest
     });
   } catch (error) {
     return next(error);
@@ -48,7 +53,7 @@ const createProjectRequest = async (req, res, next) => {
 const getProjectRequests = async (req, res, next) => {
   try {
     const projectRequests = await ProjectRequest.find({
-      owner: req.user.userId,
+      owner: req.user.userId
     });
 
     return res.status(200).json(projectRequests);
@@ -60,7 +65,7 @@ const getProjectRequests = async (req, res, next) => {
 const deleteProjectRequest = async (req, res, next) => {
   try {
     const projectRequest = await ProjectRequest.findById(
-      req.params.requestId,
+      req.params.requestId
     ).select("+owner");
 
     if (!projectRequest) {
@@ -69,14 +74,14 @@ const deleteProjectRequest = async (req, res, next) => {
 
     if (projectRequest.owner.toString() !== req.user.userId) {
       return next(
-        new ForbiddenError("You cannot delete this project request."),
+        new ForbiddenError("You cannot delete this project request.")
       );
     }
 
     await projectRequest.deleteOne();
 
     return res.status(200).json({
-      message: "Project request canceled successfully.",
+      message: "Project request canceled successfully."
     });
   } catch (error) {
     return next(error);
@@ -86,5 +91,5 @@ const deleteProjectRequest = async (req, res, next) => {
 module.exports = {
   createProjectRequest,
   getProjectRequests,
-  deleteProjectRequest,
+  deleteProjectRequest
 };
